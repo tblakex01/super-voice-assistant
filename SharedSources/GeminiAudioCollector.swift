@@ -79,24 +79,28 @@ public class GeminiAudioCollector {
                 didSendSetup = true
             }
             
-            // Send text for TTS for this turn
-            let textMessage = """
-            {
-                "client_content": {
+            // Send text for TTS for this turn — use JSONSerialization to properly
+            // escape special characters in user-provided text (HIGH-1 fix)
+            let prompt = "You must only speak the exact text provided. Do not add any introduction, explanation, commentary, or conclusion. Do not ask questions. Do not say anything before or after the text. Only speak these exact words: \(text)"
+            let payload: [String: Any] = [
+                "client_content": [
                     "turns": [
-                        {
+                        [
                             "role": "user",
                             "parts": [
-                                {
-                                    "text": "You must only speak the exact text provided. Do not add any introduction, explanation, commentary, or conclusion. Do not ask questions. Do not say anything before or after the text. Only speak these exact words: \(text)"
-                                }
+                                ["text": prompt]
                             ]
-                        }
+                        ]
                     ],
                     "turn_complete": true
-                }
+                ]
+            ]
+            let jsonData = try JSONSerialization.data(withJSONObject: payload)
+            guard let textMessage = String(data: jsonData, encoding: .utf8) else {
+                throw GeminiAudioCollectorError.collectionError(
+                    NSError(domain: "GeminiAudioCollector", code: -1,
+                            userInfo: [NSLocalizedDescriptionKey: "Failed to encode JSON payload"]))
             }
-            """
             try await webSocketTask.send(.string(textMessage))
             
             // Collect audio chunks and yield them immediately for this turn

@@ -24,51 +24,28 @@ The highest-severity finding is **improper JSON construction** in the WebSocket 
 
 ## Findings
 
-### HIGH-1: Unsafe JSON String Interpolation in WebSocket Messages
+### HIGH-1: Unsafe JSON String Interpolation in WebSocket Messages — RESOLVED
 
 **Severity:** High
-**File:** `SharedSources/GeminiAudioCollector.swift:83-98`
+**File:** `SharedSources/GeminiAudioCollector.swift:82-104`
 **Category:** Input Validation / Injection
+**Status:** ✅ Fixed
 
 **Description:**
-User-provided text is interpolated directly into a JSON string literal using Swift string interpolation (`\(text)`). If the text contains JSON-special characters (`"`, `\`, newlines, tabs, or Unicode escape sequences), the resulting JSON will be malformed.
+User-provided text was interpolated directly into a JSON string literal using Swift string interpolation (`\(text)`). If the text contained JSON-special characters (`"`, `\`, newlines, tabs, or Unicode escape sequences), the resulting JSON would be malformed.
+
+**Fix Applied:**
+Replaced raw string interpolation with `JSONSerialization.data(withJSONObject:)` to ensure all special characters in user-provided text are properly escaped:
 
 ```swift
-let textMessage = """
-{
-    "client_content": {
-        "turns": [
-            {
-                "role": "user",
-                "parts": [
-                    {
-                        "text": "...speak these exact words: \(text)"
-                    }
-                ]
-            }
-        ],
-        "turn_complete": true
-    }
-}
-"""
-```
-
-**Impact:**
-- Text containing `"` or `\` characters will produce invalid JSON, causing the API call to fail silently or produce unexpected behavior.
-- Carefully crafted text could potentially manipulate the JSON structure (JSON injection), altering the API request semantics.
-- This affects the TTS feature (Cmd+Opt+S) whenever the selected text contains special characters.
-
-**Remediation:**
-Construct the JSON using `JSONSerialization` or `Codable` to ensure proper escaping:
-
-```swift
+let prompt = "...speak these exact words: \(text)"
 let payload: [String: Any] = [
     "client_content": [
         "turns": [
             [
                 "role": "user",
                 "parts": [
-                    ["text": "...speak these exact words: \(text)"]
+                    ["text": prompt]
                 ]
             ]
         ],
@@ -76,8 +53,10 @@ let payload: [String: Any] = [
     ]
 ]
 let jsonData = try JSONSerialization.data(withJSONObject: payload)
-let jsonString = String(data: jsonData, encoding: .utf8)!
-try await webSocketTask.send(.string(jsonString))
+guard let textMessage = String(data: jsonData, encoding: .utf8) else {
+    throw GeminiAudioCollectorError.collectionError(...)
+}
+try await webSocketTask.send(.string(textMessage))
 ```
 
 ---
@@ -439,7 +418,7 @@ The following security-positive patterns were observed:
 ## Summary of Recommendations (Prioritized)
 
 ### High Priority
-1. **Fix JSON string construction** in `GeminiAudioCollector.swift` to use proper JSON serialization (HIGH-1).
+1. ~~**Fix JSON string construction** in `GeminiAudioCollector.swift` to use proper JSON serialization (HIGH-1).~~ ✅ Fixed
 
 ### Medium Priority
 2. **Reduce sensitive data in logs** - remove or redact transcription text and API responses from `print()` statements (MED-1, MED-10).
