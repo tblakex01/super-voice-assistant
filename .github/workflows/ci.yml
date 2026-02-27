@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: build-and-test
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Toolchain info
+        run: |
+          swift --version
+          xcodebuild -version
+
+      - name: Resolve package dependencies
+        run: swift package resolve
+
+      - name: Build package
+        run: swift build --build-tests
+
+      - name: Run unit tests
+        run: swift test --parallel --enable-code-coverage
